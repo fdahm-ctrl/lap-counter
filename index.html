@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFD23F">
+<meta name="description" content="A one-screen lap counter for circuit training on the bike.">
+<title>Lap counter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700&display=swap" rel="stylesheet">
+<style>
+  /* Palette taken from a criterium lap board: road-paint yellow, tarmac black. */
+  :root {
+    --paint: #FFD23F;
+    --paint-deep: #F2BD12;
+    --tarmac: #1D1F21;
+    --tarmac-soft: #4A4636;
+    --chalk: #FFF8DC;
+    --rule: rgba(29, 31, 33, 0.22);
+    --text-font: "Barlow", "Helvetica Neue", Arial, sans-serif;
+    --board-font: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; margin: 0; }
+
+  body {
+    background: var(--paint);
+    color: var(--tarmac);
+    font-family: var(--text-font);
+    font-size: 1rem;
+    line-height: 1.4;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .board {
+    min-height: 100%;
+    max-width: 30rem;
+    margin: 0 auto;
+    display: grid;
+    grid-template-rows: auto 1fr auto auto;
+    padding:
+      calc(1rem + env(safe-area-inset-top, 0px))
+      1.25rem
+      calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .count-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 0.5rem 0 1rem;
+  }
+
+  .count {
+    font-family: var(--board-font);
+    font-weight: 700;
+    font-size: clamp(9rem, 46vw, 17rem);
+    line-height: 0.82;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    margin-left: -0.04em;
+  }
+
+  .count.bump { animation: bump 160ms ease-out; }
+
+  @keyframes bump {
+    0% { transform: translateY(0.04em); }
+    100% { transform: translateY(0); }
+  }
+
+  .last-split {
+    margin: 0.75rem 0 0;
+    font-size: 1.125rem;
+    font-weight: 500;
+    min-height: 1.6em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .controls { display: grid; gap: 0.75rem; }
+
+  button {
+    font: inherit;
+    color: inherit;
+    border: 0;
+    border-radius: 0.5rem;
+    cursor: pointer;
+  }
+
+  button:focus-visible {
+    outline: 3px solid var(--tarmac);
+    outline-offset: 3px;
+  }
+
+  .add {
+    background: var(--tarmac);
+    color: var(--paint);
+    font-family: var(--board-font);
+    font-weight: 700;
+    font-size: 2.25rem;
+    letter-spacing: 0.01em;
+    padding: 1.6rem 1rem;
+    width: 100%;
+  }
+
+  .add:active { background: #000; }
+
+  .secondary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .secondary button {
+    background: transparent;
+    border: 2px solid var(--tarmac);
+    font-weight: 600;
+    padding: 0.85rem 0.5rem;
+  }
+
+  .secondary button:active { background: var(--paint-deep); }
+
+  .secondary button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .secondary button.armed {
+    background: var(--tarmac);
+    color: var(--chalk);
+  }
+
+  .history {
+    margin-top: 1.5rem;
+    border-top: 2px solid var(--tarmac);
+    padding-top: 0.75rem;
+  }
+
+  .history h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .history ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .history li {
+    display: grid;
+    grid-template-columns: 5rem 1fr auto;
+    gap: 0.5rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--rule);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .history li:last-child { border-bottom: 0; }
+
+  .history .split { font-weight: 600; }
+
+  .history .empty {
+    display: block;
+    color: var(--tarmac-soft);
+    padding: 0.4rem 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .count.bump { animation: none; }
+  }
+</style>
+</head>
+<body>
+<main class="board">
+  <h1>Lap counter</h1>
+
+  <div class="count-wrap">
+    <div class="count" id="count" aria-live="polite" aria-label="Laps completed">0</div>
+    <p class="last-split" id="lastSplit"></p>
+  </div>
+
+  <div class="controls">
+    <button class="add" id="add" type="button">Add lap</button>
+    <div class="secondary">
+      <button id="undo" type="button">Undo last lap</button>
+      <button id="reset" type="button">Reset</button>
+    </div>
+  </div>
+
+  <section class="history" aria-labelledby="historyTitle">
+    <h2 id="historyTitle">Last five laps</h2>
+    <ol id="history"></ol>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "lap-counter.laps.v1";
+  var RESET_CONFIRM_MS = 3000;
+
+  // Each lap is stored as the time it was completed, in milliseconds.
+  var laps = load();
+  var resetArmed = false;
+  var resetTimer = null;
+  var wakeLock = null;
+
+  var countEl = document.getElementById("count");
+  var lastSplitEl = document.getElementById("lastSplit");
+  var historyEl = document.getElementById("history");
+  var addBtn = document.getElementById("add");
+  var undoBtn = document.getElementById("undo");
+  var resetBtn = document.getElementById("reset");
+
+  // --- storage: keeps the count if the page reloads or the phone locks ---
+
+  function load() {
+    try {
+      var raw = window.localStorage.getItem(STORAGE_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter(Number.isFinite) : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function save() {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(laps));
+    } catch (err) {
+      // Storage can be unavailable (private mode). The counter still works.
+    }
+  }
+
+  // --- formatting ---
+
+  function clockTime(ms) {
+    return new Date(ms).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+  }
+
+  function duration(ms) {
+    var totalSeconds = Math.round(ms / 1000);
+    var hours = Math.floor(totalSeconds / 3600);
+    var minutes = Math.floor((totalSeconds % 3600) / 60);
+    var seconds = totalSeconds % 60;
+    var ss = String(seconds).padStart(2, "0");
+    if (hours > 0) {
+      return hours + ":" + String(minutes).padStart(2, "0") + ":" + ss;
+    }
+    return minutes + ":" + ss;
+  }
+
+  // Time taken for lap at index i. The first lap has no earlier mark to measure from.
+  function splitFor(i) {
+    return i > 0 ? laps[i] - laps[i - 1] : null;
+  }
+
+  // --- rendering ---
+
+  function render(bump) {
+    countEl.textContent = String(laps.length);
+
+    if (bump) {
+      countEl.classList.remove("bump");
+      void countEl.offsetWidth; // restart the animation
+      countEl.classList.add("bump");
+    }
+
+    var lastSplit = splitFor(laps.length - 1);
+    lastSplitEl.textContent = lastSplit === null ? "" : "Last lap took " + duration(lastSplit);
+
+    undoBtn.disabled = laps.length === 0;
+    resetBtn.disabled = laps.length === 0;
+
+    historyEl.textContent = "";
+    if (laps.length === 0) {
+      var empty = document.createElement("li");
+      empty.className = "empty";
+      empty.textContent = "No laps yet. Tap Add lap each time you cross the line.";
+      historyEl.appendChild(empty);
+      return;
+    }
+
+    var first = Math.max(0, laps.length - 5);
+    for (var i = laps.length - 1; i >= first; i--) {
+      var row = document.createElement("li");
+
+      var name = document.createElement("span");
+      name.textContent = "Lap " + (i + 1);
+
+      var at = document.createElement("span");
+      at.textContent = clockTime(laps[i]);
+
+      var split = document.createElement("span");
+      split.className = "split";
+      var s = splitFor(i);
+      split.textContent = s === null ? "" : duration(s);
+
+      row.appendChild(name);
+      row.appendChild(at);
+      row.appendChild(split);
+      historyEl.appendChild(row);
+    }
+  }
+
+  // --- actions ---
+
+  function addLap() {
+    disarmReset();
+    laps.push(Date.now());
+    save();
+    render(true);
+    if (navigator.vibrate) { navigator.vibrate(30); }
+    keepScreenOn();
+  }
+
+  function undoLap() {
+    disarmReset();
+    if (laps.length === 0) { return; }
+    laps.pop();
+    save();
+    render(false);
+  }
+
+  // Reset needs two taps, so a stray touch mid-ride cannot wipe the session.
+  function resetLaps() {
+    if (!resetArmed) {
+      resetArmed = true;
+      resetBtn.classList.add("armed");
+      resetBtn.textContent = "Tap again to reset";
+      resetTimer = window.setTimeout(disarmReset, RESET_CONFIRM_MS);
+      return;
+    }
+    disarmReset();
+    laps = [];
+    save();
+    render(false);
+  }
+
+  function disarmReset() {
+    if (resetTimer) { window.clearTimeout(resetTimer); resetTimer = null; }
+    resetArmed = false;
+    resetBtn.classList.remove("armed");
+    resetBtn.textContent = "Reset";
+  }
+
+  // Ask the browser to keep the screen awake while counting. Not all browsers allow it.
+  function keepScreenOn() {
+    if (!("wakeLock" in navigator) || wakeLock) { return; }
+    navigator.wakeLock.request("screen").then(function (lock) {
+      wakeLock = lock;
+      lock.addEventListener("release", function () { wakeLock = null; });
+    }).catch(function () { /* fine without it */ });
+  }
+
+  addBtn.addEventListener("click", addLap);
+  undoBtn.addEventListener("click", undoLap);
+  resetBtn.addEventListener("click", resetLaps);
+
+  // Space bar adds a lap when no button has focus (useful on a laptop by the track).
+  document.addEventListener("keydown", function (event) {
+    if (event.code === "Space" && event.target === document.body) {
+      event.preventDefault();
+      addLap();
+    }
+  });
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && laps.length > 0) { keepScreenOn(); }
+  });
+
+  render(false);
+})();
+</script>
+</body>
+</html>
